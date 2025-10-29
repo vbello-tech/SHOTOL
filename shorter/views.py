@@ -9,6 +9,7 @@ from .models import URL, UrlHistory
 from user_agents import parse
 from django.contrib import messages
 from datetime import timedelta
+from .utils import geo_service
 
 
 # Create your views here.
@@ -48,7 +49,7 @@ class HomeView(View):
                 owner=request.user,
                 url=original_url,
                 slug=generate_slug(),
-                expires_at=expiry_date,
+                expires_at=expiry_date or None,
             )
             messages.success(request, 'URL shortened successfully!')
 
@@ -70,7 +71,7 @@ class RedirectView(View):
         shortened_url = get_object_or_404(URL, slug=slug, is_active=True)
 
         # Check if expired
-        if shortened_url.expires_at < timezone.now():
+        if shortened_url.expires_at and shortened_url < timezone.now():
             raise Http404("This link has expired")
 
         # Increment basic counter
@@ -81,6 +82,9 @@ class RedirectView(View):
 
         # Get IP address
         ip_address = self.get_client_ip(request)
+
+        # Get country and city
+        location = geo_service.get_location(ip_address)
 
         # Parse user agent
         user_agent_string = request.META.get('HTTP_USER_AGENT', '')
@@ -101,7 +105,9 @@ class RedirectView(View):
             user_agent=user_agent_string,
             device_type=device_type,
             browser=user_agent.browser.family,
-            operating_system=user_agent.os.family
+            operating_system=user_agent.os.family,
+            country=location['country'],
+            city=location['city'],
         )
 
         # Redirect to original URL

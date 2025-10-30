@@ -129,3 +129,60 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 GEOIP_PATH = os.path.join(BASE_DIR, 'geoip')  # Create this folder
 GEOIP_CITY = 'GeoLite2-City.mmdb'
 GEOIP_COUNTRY = 'GeoLite2-Country.mmdb'
+
+
+# Redis Cache using django-redis
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": "redis://127.0.0.1:6379/1",
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        },
+        'KEY_PREFIX': 'shotol',  # Prefix for all keys
+        'TIMEOUT': 86400,
+    }
+}
+
+# cache sessions
+SESSION_ENGINE = "django.contrib.sessions.backends.cache"
+SESSION_CACHE_ALIAS = "default"
+
+# cache time out
+CACHE_TTL = {
+    'url_lookup': 86400,      # 24 hours
+}
+
+# LOGGING TO FILE (shotol.log)
+
+LOGGING = {
+    "version": 1,
+    'disable_existing_loggers': False,
+    "formatters": {
+        "verbose": {
+            "format": "{name} {levelname} {asctime} {module} {process:d} {thread:d} {message}",
+            "style": "{",
+        },
+        "simple": {
+            "format": "{levelname} {message}",
+            "style": "{",
+        },
+    },
+    'handlers': {
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': BASE_DIR / 'shotol.log',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['file'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+    },
+    "root": {"level": "INFO", "handlers": ["file"]},
+}
+

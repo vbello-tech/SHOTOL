@@ -40,6 +40,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     'shorter',
+
+    'django_celery_results',
 ]
 
 MIDDLEWARE = [
@@ -152,6 +154,16 @@ SESSION_CACHE_ALIAS = "default"
 CACHE_TTL = {
     'url_lookup': 86400,      # 24 hours
 }
+
+# celery redis for background task
+CELERY_BROKER_URL = 'redis://localhost:6379/0'  # Using Redis as message broker
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+
+# CELERY_ACCEPT_CONTENT = ['json']
+# CELERY_TASK_SERIALIZER = 'json'
+# CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
+CELERY_ENABLE_UTC = True
 
 # LOGGING TO FILE (shotol.log)
 

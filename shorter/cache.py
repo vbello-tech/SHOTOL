@@ -28,7 +28,7 @@ class URLCacheService:
             data = cache.get(cache_key)
 
             if data:
-                logger.debug(f"Cache HIT for {slug}")
+                logger.info(f"Cache HIT for {slug}")
             else:
                 logger.debug(f"Cache MISS for {slug}")
 

@@ -6,11 +6,11 @@ from django.http import JsonResponse, Http404, HttpResponse
 from django.views import View
 from django.utils import timezone
 from .models import URL, UrlHistory
-from user_agents import parse
 from django.contrib import messages
 from datetime import timedelta
-from .utils import geo_service, track_click
+from .task import track_click
 from .cache import URLCacheService
+from user_agents import parse
 # Create your views here.
 
 
@@ -65,17 +65,60 @@ class HomeView(View):
 
 class RedirectView(View):
     """Redirect to original URL and track analytics."""
+    def get_client_ip(self, request):
+        """Extract client IP address from request."""
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0]
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+        return ip
+
+    def user_agent_str(self, request):
+        user_agent_string = request.META.get('HTTP_USER_AGENT', '')
+        return user_agent_string
+
+    def user_agent(self, request):
+        return parse(self.user_agent_str(request))
+
+    def device(self, request):
+        agent = self.user_agent(request)
+        # Determine device type
+        if agent.is_mobile:
+            device_type = 'mobile'
+        elif agent.is_tablet:
+            device_type = 'tablet'
+        else:
+            device_type = 'desktop'
+        return device_type
+
+    def browser(self, request):
+        return self.user_agent(request).browser.family
+
+    def os(self, request):
+        return self.user_agent(request).os.family,
 
     def get(self, request, slug):
+
+        ip = self.get_client_ip(request)
+        u_a_s = str(self.user_agent_str(request))
+        u_a = str(self.user_agent(request))
+        d = str(self.device(request))
+        b = str(self.browser(request))
+        os = str(self.os(request))
+
         cached_data = URLCacheService.get_url(slug)
         if cached_data:
             url = cached_data['url']
             is_active = cached_data['is_active']
             expires_at = cached_data['expires_at']
+            url_id = cached_data['url_id']
 
             if expires_at and expires_at < timezone.now():
                 return HttpResponse("This link has expired")
 
+            # track click
+            track_click.delay(url_id, ip, u_a_s, d, b, os)
             return redirect(url)
         else:
             shortened_url = get_object_or_404(URL, slug=slug, is_active=True)
@@ -87,58 +130,15 @@ class RedirectView(View):
             # cache data
             cached_data = {
                 'url': shortened_url.url,
+                'url_id': shortened_url.id,
                 'is_active': shortened_url.is_active,
                 'expires_at': shortened_url.expires_at
             }
-
             URLCacheService.set_url(slug, cached_data)
-            # Increment basic counter
-            shortened_url.increment_click()
 
-            # Track the click
-            """Track detailed analytics for this click."""
-
-            # Get IP address
-            ip_address = self.get_client_ip(request)
-
-            # Get country and city
-            location = geo_service.get_location(ip_address)
-
-            # Parse user agent
-            user_agent_string = request.META.get('HTTP_USER_AGENT', '')
-            user_agent = parse(user_agent_string)
-
-            # Determine device type
-            if user_agent.is_mobile:
-                device_type = 'mobile'
-            elif user_agent.is_tablet:
-                device_type = 'tablet'
-            else:
-                device_type = 'desktop'
-
-            # Create click record
-            UrlHistory.objects.create(
-                url=shortened_url,
-                ip_address=ip_address,
-                user_agent=user_agent_string,
-                device_type=device_type,
-                browser=user_agent.browser.family,
-                operating_system=user_agent.os.family,
-                country=location['country'],
-                city=location['city'],
-            )
-
-            # Redirect to original URL
+            # track click
+            track_click.delay(shortened_url.id, ip, u_a_s, d, b, os)
             return redirect(shortened_url.url)
-
-    def get_client_ip(self, request):
-        """Extract client IP address from request."""
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip
 
 
 class AnalyticsView(View):
